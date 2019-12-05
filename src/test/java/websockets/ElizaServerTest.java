@@ -24,14 +24,13 @@ import static org.junit.Assert.assertEquals;
 
 public class ElizaServerTest {
 
-    private static final Logger LOGGER = Grizzly.logger(ElizaServerTest.class);
+	private static final Logger LOGGER = Grizzly.logger(ElizaServerTest.class);
 
 	private Server server;
 
 	@Before
 	public void setup() throws DeploymentException {
-		server = new Server("localhost", 8025, "/websockets",
-            new HashMap<>(), ElizaServerEndpoint.class);
+		server = new Server("localhost", 8025, "/websockets", new HashMap<>(), ElizaServerEndpoint.class);
 		server.start();
 	}
 
@@ -49,23 +48,30 @@ public class ElizaServerTest {
 			}
 
 		}, configuration, new URI("ws://localhost:8025/websockets/eliza"));
-        session.getAsyncRemote().sendText("bye");
-        latch.await();
+		session.getAsyncRemote().sendText("bye");
+		latch.await();
 		assertEquals(3, list.size());
 		assertEquals("The doctor is in.", list.get(0));
 	}
 
 	@Test(timeout = 1000)
-	@Ignore
 	public void onChat() throws DeploymentException, IOException, URISyntaxException, InterruptedException {
-		// COMPLETE ME!!
+		CountDownLatch latch = new CountDownLatch(4);
 		List<String> list = new ArrayList<>();
 		ClientEndpointConfig configuration = ClientEndpointConfig.Builder.create().build();
 		ClientManager client = ClientManager.createClient();
-		client.connectToServer(new ElizaEndpointToComplete(list), configuration, new URI("ws://localhost:8025/websockets/eliza"));
-		// COMPLETE ME!!
-		// COMPLETE ME!!
-		// COMPLETE ME!!
+		Session session = client.connectToServer(new Endpoint() {
+
+			@Override
+			public void onOpen(Session session, EndpointConfig config) {
+				session.addMessageHandler(new ElizaOnOpenMessageHandler(list, latch));
+			}
+
+		}, configuration, new URI("ws://localhost:8025/websockets/eliza"));
+		session.getAsyncRemote().sendText("sorry");
+		latch.await();
+		assertEquals(4, list.size());
+		assertEquals("Please don't apologize.", list.get(3));
 	}
 
 	@After
@@ -73,47 +79,46 @@ public class ElizaServerTest {
 		server.stop();
 	}
 
-    private static class ElizaOnOpenMessageHandler implements MessageHandler.Whole<String> {
+	private static class ElizaOnOpenMessageHandler implements MessageHandler.Whole<String> {
 
-        private final List<String> list;
-        private final CountDownLatch latch;
+		private final List<String> list;
+		private final CountDownLatch latch;
 
-        ElizaOnOpenMessageHandler(List<String> list, CountDownLatch latch) {
-            this.list = list;
-            this.latch = latch;
-        }
+		ElizaOnOpenMessageHandler(List<String> list, CountDownLatch latch) {
+			this.list = list;
+			this.latch = latch;
+		}
 
-        @Override
-        public void onMessage(String message) {
-            LOGGER.info(format("Client received \"%s\"", message));
-            list.add(message);
-            latch.countDown();
-        }
-    }
+		@Override
+		public void onMessage(String message) {
+			LOGGER.info(format("Client received \"%s\"", message));
+			list.add(message);
+			latch.countDown();
+		}
+	}
 
-    private static class ElizaEndpointToComplete extends Endpoint {
+	private static class ElizaEndpointToComplete extends Endpoint {
 
-        private final List<String> list;
+		private final List<String> list;
+		private final CountDownLatch latch;
 
-        ElizaEndpointToComplete(List<String> list) {
-            this.list = list;
-        }
+		ElizaEndpointToComplete(List<String> list, CountDownLatch latch) {
+			this.list = list;
+			this.latch = latch;
+		}
 
-        @Override
-        public void onOpen(Session session, EndpointConfig config) {
+		@Override
+		public void onOpen(Session session, EndpointConfig config) {
+			session.addMessageHandler(new ElizaMessageHandlerToComplete());
+		}
 
-            // COMPLETE ME!!!
+		private class ElizaMessageHandlerToComplete implements MessageHandler.Whole<String> {
 
-            session.addMessageHandler(new ElizaMessageHandlerToComplete());
-        }
-
-        private class ElizaMessageHandlerToComplete implements MessageHandler.Whole<String> {
-
-            @Override
-            public void onMessage(String message) {
-                list.add(message);
-                // COMPLETE ME!!!
-            }
-        }
-    }
+			@Override
+			public void onMessage(String message) {
+				list.add(message);
+				latch.countDown();
+			}
+		}
+	}
 }
